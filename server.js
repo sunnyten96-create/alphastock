@@ -175,6 +175,14 @@ function toYahooSymbol(input) {
 }
 
 async function fetchDaily(symbol) {
+  try {
+    return await fetchDailyFromYahoo(symbol);
+  } catch (error) {
+    return await fetchDailyFromStooq(symbol, error);
+  }
+}
+
+async function fetchDailyFromYahoo(symbol) {
   const yahoo = toYahooSymbol(symbol);
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahoo)}?range=10y&interval=1d&events=history`;
   const res = await fetch(url, { headers: { "user-agent": "CodexMarketAdvisor/1.0" } });
@@ -196,6 +204,36 @@ async function fetchDaily(symbol) {
   return rows;
 }
 
+function toStooqSymbol(input) {
+  const raw = String(input || "SPY").trim().toUpperCase().replace(/[^A-Z0-9.^-]/g, "");
+  if (raw === "BTC") return "btcusd";
+  if (raw === "EURUSD") return "eurusd";
+  if (raw === "^VIX") return "^vix";
+  if (raw.startsWith("^")) return raw.toLowerCase();
+  return `${raw.replace(".", "-").toLowerCase()}.us`;
+}
+
+async function fetchDailyFromStooq(symbol, cause) {
+  const stooq = toStooqSymbol(symbol);
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooq)}&i=d`;
+  const res = await fetch(url, { headers: { "user-agent": "AlphaStockFallback/1.0" } });
+  if (!res.ok) throw new Error(`${cause?.message || "Yahoo failed"}; Stooq returned ${res.status}`);
+  const csv = await res.text();
+  const rows = csv.trim().split(/\r?\n/).slice(1).map((line) => {
+    const [date, open, high, low, close, volume] = line.split(",");
+    return {
+      date,
+      open: Number(open),
+      high: Number(high),
+      low: Number(low),
+      close: Number(close),
+      volume: Number(volume || 0)
+    };
+  }).filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.close) && Number.isFinite(row.high) && Number.isFinite(row.low));
+  if (rows.length < 80) throw new Error(`${cause?.message || "Yahoo failed"}; Stooq fallback has not enough data for ${symbol}`);
+  return rows.slice(-2600);
+}
+
 const chartFrames = {
   "5m": { range: "5d", interval: "5m", minRows: 20 },
   "1h": { range: "3mo", interval: "1h", minRows: 40 },
@@ -214,23 +252,28 @@ async function fetchChart(symbol, frameInput = "1d") {
   const config = chartFrames[frame];
   const yahoo = toYahooSymbol(symbol);
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahoo)}?range=${config.range}&interval=${config.interval}&events=history&includePrePost=true`;
-  const res = await fetch(url, { headers: { "user-agent": "AlphaStockChart/1.0" } });
-  if (!res.ok) throw new Error(`Yahoo Finance chart returned ${res.status}`);
-  const payload = await res.json();
-  const result = payload.chart?.result?.[0];
-  const quote = result?.indicators?.quote?.[0];
-  const timestamps = result?.timestamp || [];
-  if (!quote || !timestamps.length) throw new Error(`No chart data for ${symbol}`);
-  const rows = timestamps.map((time, index) => ({
-    date: new Date(time * 1000).toISOString(),
-    open: Number(quote.open[index]),
-    high: Number(quote.high[index]),
-    low: Number(quote.low[index]),
-    close: Number(quote.close[index]),
-    volume: Number(quote.volume[index] || 0)
-  })).filter((row) => Number.isFinite(row.close) && Number.isFinite(row.high) && Number.isFinite(row.low));
-  if (rows.length < config.minRows) throw new Error(`Not enough ${frame} chart data for ${symbol}`);
-  return { symbol: yahoo, frame, range: config.range, interval: config.interval, rows };
+  try {
+    const res = await fetch(url, { headers: { "user-agent": "AlphaStockChart/1.0" } });
+    if (!res.ok) throw new Error(`Yahoo Finance chart returned ${res.status}`);
+    const payload = await res.json();
+    const result = payload.chart?.result?.[0];
+    const quote = result?.indicators?.quote?.[0];
+    const timestamps = result?.timestamp || [];
+    if (!quote || !timestamps.length) throw new Error(`No chart data for ${symbol}`);
+    const rows = timestamps.map((time, index) => ({
+      date: new Date(time * 1000).toISOString(),
+      open: Number(quote.open[index]),
+      high: Number(quote.high[index]),
+      low: Number(quote.low[index]),
+      close: Number(quote.close[index]),
+      volume: Number(quote.volume[index] || 0)
+    })).filter((row) => Number.isFinite(row.close) && Number.isFinite(row.high) && Number.isFinite(row.low));
+    if (rows.length < config.minRows) throw new Error(`Not enough ${frame} chart data for ${symbol}`);
+    return { symbol: yahoo, frame, range: config.range, interval: config.interval, rows };
+  } catch (error) {
+    const rows = (await fetchDailyFromStooq(symbol, error)).map((row) => ({ ...row, date: `${row.date}T00:00:00.000Z` }));
+    return { symbol: toStooqSymbol(symbol), frame: "1d", range: "10y", interval: "1d", rows };
+  }
 }
 
 async function fetchNews(symbols) {
