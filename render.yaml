@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: alphastock
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_USER
+        value: alphastock
+      - key: APP_PASSWORD
+        sync: false
+      - key: KIS_TRADING_MODE
+        value: paper
+      - key: KIS_ORDER_EXECUTION
+        value: disabled
+      - key: KIS_ALLOW_LIVE_ORDERS
+        value: "false"
+      - key: KIS_HASH_ORDERS
+        value: "true"
+      - key: KIS_ACCOUNT_PRODUCT
+        value: "01"
+      - key: KIS_OVERSEAS_EXCHANGE
+        value: NASD
+      - key: KIS_OVERSEAS_CURRENCY
+        value: USD
