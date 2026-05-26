@@ -91,6 +91,10 @@ function requireAppAuth(req, res) {
   return false;
 }
 
+function routeIs(url, ...paths) {
+  return paths.includes(url.pathname);
+}
+
 async function loadLocalEnv() {
   try {
     const values = parseEnvText(await readFile(envPath, "utf8"));
@@ -422,19 +426,19 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (!requireAppAuth(req, res)) return;
-    if (url.pathname === "/api/daily") {
+    if (routeIs(url, "/api/daily", "/market/daily")) {
       const symbol = url.searchParams.get("symbol") || "SPY";
       const rows = await fetchDaily(symbol);
       await sendJson(res, { symbol: symbol.toUpperCase(), source: "Yahoo Finance chart API", rows });
       return;
     }
-    if (url.pathname === "/api/chart") {
+    if (routeIs(url, "/api/chart", "/market/chart")) {
       const symbol = url.searchParams.get("symbol") || "QQQ";
       const frame = url.searchParams.get("frame") || "1d";
       await sendJson(res, { source: "Yahoo Finance chart API", ...await fetchChart(symbol, frame) });
       return;
     }
-    if (url.pathname === "/api/market-map") {
+    if (routeIs(url, "/api/market-map", "/market/map")) {
       const tickers = ["SPY", "QQQ", "IWM", "TLT", "GLD", "USO", "BTC"];
       const entries = await Promise.allSettled(tickers.map(async (ticker) => {
         const rows = await fetchDaily(ticker);
@@ -443,12 +447,12 @@ const server = http.createServer(async (req, res) => {
       await sendJson(res, entries.filter((entry) => entry.status === "fulfilled").map((entry) => entry.value));
       return;
     }
-    if (url.pathname === "/api/news") {
+    if (routeIs(url, "/api/news", "/market/news")) {
       const symbols = url.searchParams.get("symbols") || "SPY";
       await sendJson(res, { symbols, items: await fetchNews(symbols) });
       return;
     }
-    if (url.pathname === "/api/fundamentals") {
+    if (routeIs(url, "/api/fundamentals", "/market/fundamentals")) {
       const symbol = url.searchParams.get("symbol") || "QQQ";
       try {
         await sendJson(res, { source: "Yahoo Finance quote API", data: await fetchFundamentals(symbol) });
@@ -460,15 +464,15 @@ const server = http.createServer(async (req, res) => {
       }
       return;
     }
-    if (url.pathname === "/api/portfolio" && req.method === "GET") {
+    if (routeIs(url, "/api/portfolio", "/market/portfolio") && req.method === "GET") {
       await sendJson(res, await readPortfolio());
       return;
     }
-    if (url.pathname === "/api/portfolio" && req.method === "POST") {
+    if (routeIs(url, "/api/portfolio", "/market/portfolio") && req.method === "POST") {
       await sendJson(res, await writePortfolio(await readJsonBody(req)));
       return;
     }
-    if (url.pathname === "/api/research/latest" && req.method === "GET") {
+    if (routeIs(url, "/api/research/latest", "/market/research/latest") && req.method === "GET") {
       try {
         const json = JSON.parse(await readFile(researchReportPath, "utf8"));
         const slim = {
@@ -501,19 +505,19 @@ const server = http.createServer(async (req, res) => {
       }
       return;
     }
-    if (url.pathname === "/api/kis/status" && req.method === "GET") {
+    if (routeIs(url, "/api/kis/status", "/market/kis/status") && req.method === "GET") {
       await sendJson(res, kisStatus(dataDir));
       return;
     }
-    if (url.pathname === "/api/kis/settings" && req.method === "GET") {
+    if (routeIs(url, "/api/kis/settings", "/market/kis/settings") && req.method === "GET") {
       await sendJson(res, await readKisSettings());
       return;
     }
-    if (url.pathname === "/api/kis/settings" && req.method === "POST") {
+    if (routeIs(url, "/api/kis/settings", "/market/kis/settings") && req.method === "POST") {
       await sendJson(res, await writeKisSettings(await readJsonBody(req)));
       return;
     }
-    if (url.pathname === "/api/kis/sync" && req.method === "POST") {
+    if (routeIs(url, "/api/kis/sync", "/market/kis/sync") && req.method === "POST") {
       const payload = await syncKisOverseasPortfolio(dataDir, await readJsonBody(req));
       const current = await readPortfolio();
       const portfolio = await writePortfolio({
@@ -525,11 +529,11 @@ const server = http.createServer(async (req, res) => {
       await sendJson(res, { ...payload, portfolio });
       return;
     }
-    if (url.pathname === "/api/kis/orders/preview" && req.method === "POST") {
+    if (routeIs(url, "/api/kis/orders/preview", "/market/kis/orders/preview") && req.method === "POST") {
       await sendJson(res, previewKisOrders(dataDir, await readJsonBody(req)));
       return;
     }
-    if (url.pathname === "/api/kis/orders" && req.method === "POST") {
+    if (routeIs(url, "/api/kis/orders", "/market/kis/orders") && req.method === "POST") {
       await sendJson(res, await executeKisOrders(dataDir, await readJsonBody(req)));
       return;
     }
