@@ -426,7 +426,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (!requireAppAuth(req, res)) return;
-    if (routeIs(url, "/api/daily", "/market/daily")) {
+    if (routeIs(url, "/api/daily", "/market/daily", "/market/series")) {
       const symbol = url.searchParams.get("symbol") || "SPY";
       const rows = await fetchDaily(symbol);
       await sendJson(res, { symbol: symbol.toUpperCase(), source: "Yahoo Finance chart API", rows });
