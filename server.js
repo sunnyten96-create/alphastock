@@ -95,6 +95,23 @@ function routeIs(url, ...paths) {
   return paths.includes(url.pathname);
 }
 
+function isPublicReadRoute(url) {
+  return routeIs(
+    url,
+    "/market/series",
+    "/market/daily",
+    "/api/daily",
+    "/market/chart",
+    "/api/chart",
+    "/market/news",
+    "/api/news",
+    "/market/fundamentals",
+    "/api/fundamentals",
+    "/market/research/latest",
+    "/api/research/latest"
+  );
+}
+
 async function loadLocalEnv() {
   try {
     const values = parseEnvText(await readFile(envPath, "utf8"));
@@ -425,7 +442,7 @@ const server = http.createServer(async (req, res) => {
       await sendJson(res, { ok: true, service: "alphastock", time: new Date().toISOString() });
       return;
     }
-    if (!requireAppAuth(req, res)) return;
+    if (!isPublicReadRoute(url) && !requireAppAuth(req, res)) return;
     if (routeIs(url, "/api/daily", "/market/daily", "/market/series")) {
       const symbol = url.searchParams.get("symbol") || "SPY";
       const rows = await fetchDaily(symbol);
