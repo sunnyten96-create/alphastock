@@ -120,7 +120,7 @@ function indicators(rows) {
 }
 
 async function fetchAsset(symbol) {
-  const res = await fetch(`/market/daily?symbol=${encodeURIComponent(symbol)}`);
+  const res = await fetch(`/market/series?symbol=${encodeURIComponent(symbol)}`);
   const payload = await res.json();
   if (!res.ok) throw new Error(payload.error || `${symbol} data failed`);
   return { symbol, rows: payload.rows, ind: indicators(payload.rows) };
