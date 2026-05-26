@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>알파스톡</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="global-header">
+      <div class="brand">알파스톡</div>
+      <form id="control-form" class="search-form">
+        <label for="symbol">종목명·티커 입력</label>
+        <div class="symbol-search">
+          <input id="symbol" name="symbol" value="QQQ" autocomplete="off">
+          <div id="symbol-results" class="symbol-results" hidden></div>
+        </div>
+        <input id="capital" name="capital" value="10000000" inputmode="numeric" aria-label="운용금액">
+        <input id="monthly-contribution" name="monthly-contribution" value="1000000" inputmode="numeric" aria-label="월 추가금">
+        <button type="submit">검색·계산</button>
+      </form>
+    </header>
+
+    <main class="stock-page">
+      <section class="stock-hero">
+        <div class="stock-title">
+          <p class="eyebrow">미국 종목 / 주식</p>
+          <div class="ticker-row">
+            <h1 id="stock-hero-name">QQQ</h1>
+            <span id="stock-hero-market">나스닥</span>
+            <button id="reload-all" type="button">전체 재계산</button>
+          </div>
+          <p id="stock-hero-desc">차트·보조지표·월간 리밸런싱·KIS 연동을 한 종목 상세 안에서 확인합니다.</p>
+        </div>
+        <div class="price-card">
+          <span class="label">현재가</span>
+          <strong id="stock-hero-price">-</strong>
+          <span id="stock-hero-change" class="muted">-</span>
+          <small id="report-date">-</small>
+        </div>
+        <div class="signal-card">
+          <span class="label">알파스톡 판단</span>
+          <strong id="next-action">계산 중</strong>
+          <span id="next-regime">-</span>
+        </div>
+      </section>
+
+      <section class="summary-band">
+        <div>
+          <span class="label">워크포워드 연복리</span>
+          <strong id="wf-cagr">-</strong>
+        </div>
+        <div>
+          <span class="label" id="benchmark-edge-label">벤치마크 대비 낙폭</span>
+          <strong id="dd-edge">-</strong>
+        </div>
+        <div>
+          <span class="label">월간 추가금</span>
+          <strong id="hero-monthly">-</strong>
+        </div>
+        <div>
+          <span class="label">운용금액</span>
+          <strong id="hero-capital">-</strong>
+        </div>
+      </section>
+
+      <nav class="app-tabs" aria-label="종목 상세 메뉴">
+        <button class="app-tab active" data-view="brief" type="button">차트·시세</button>
+        <button class="app-tab" data-view="single" type="button">종목분석</button>
+        <button class="app-tab" data-view="live" type="button">보유·운용</button>
+        <button class="app-tab" data-view="contribution" type="button">투자추천</button>
+        <button class="app-tab" data-view="replay" type="button">리플레이</button>
+        <button class="app-tab" data-view="lab" type="button">전략랩</button>
+        <button class="app-tab" data-view="stress" type="button">하락검증</button>
+        <button class="app-tab" data-view="alerts" type="button">알림센터</button>
+        <button class="app-tab" data-view="settings" type="button">설정</button>
+      </nav>
+
+      <section class="view active" id="view-brief">
+        <div class="detail-grid">
+          <section class="chart-panel">
+            <div class="panel-head">
+              <div>
+                <h2>차트</h2>
+                <p id="chart-copy">가격 흐름과 알파스톡 워크포워드 전략을 함께 봅니다.</p>
+              </div>
+            </div>
+            <div class="chart-toolbar">
+              <button class="frame-btn" data-frame="5m" type="button">5분</button>
+              <button class="frame-btn" data-frame="1h" type="button">1시간</button>
+              <button class="frame-btn active" data-frame="1d" type="button">일</button>
+              <button class="frame-btn" data-frame="1wk" type="button">주</button>
+              <button class="frame-btn" data-frame="1mo" type="button">월</button>
+              <button id="indicator-toggle" type="button">보조지표</button>
+              <button id="chart-type-toggle" type="button">라인/캔들</button>
+              <button class="shortcut-chip" data-jump-view="replay" type="button">전략 리플레이</button>
+            </div>
+            <div id="indicator-menu" class="indicator-menu" hidden>
+              <label><input type="checkbox" value="sma20" checked> 이동평균 20</label>
+              <label><input type="checkbox" value="sma50" checked> 이동평균 50</label>
+              <label><input type="checkbox" value="sma200"> 이동평균 200</label>
+              <label><input type="checkbox" value="bollinger"> 볼린저 밴드</label>
+              <label><input type="checkbox" value="volume" checked> 거래량</label>
+              <label><input type="checkbox" value="mfi" checked> MFI</label>
+              <label><input type="checkbox" value="rsi" checked> RSI</label>
+              <label><input type="checkbox" value="macd"> MACD</label>
+              <label><input type="checkbox" value="atr"> ATR</label>
+            </div>
+            <canvas id="stock-chart" width="1200" height="560"></canvas>
+            <canvas id="portfolio-chart" width="1200" height="520"></canvas>
+          </section>
+
+          <aside class="right-stack">
+            <section class="quote-box">
+              <h2>시세정보</h2>
+              <dl id="quote-overview"></dl>
+            </section>
+            <section class="quote-box">
+              <h2>투자정보</h2>
+              <dl id="indicator-overview"></dl>
+            </section>
+            <section class="quote-box">
+              <h2>거래 전 보고서</h2>
+              <div id="pretrade-report"></div>
+            </section>
+          </aside>
+        </div>
+
+        <section class="portfolio-panel">
+          <div class="panel-head">
+            <div>
+              <h2>일별 시세</h2>
+              <p class="muted">선택 종목의 최근 일별 가격 흐름입니다.</p>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>날짜</th>
+                  <th>종가</th>
+                  <th>전일대비</th>
+                  <th>등락률</th>
+                  <th>시가</th>
+                  <th>고가</th>
+                  <th>저가</th>
+                  <th>거래량</th>
+                </tr>
+              </thead>
+              <tbody id="daily-price-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="portfolio-panel">
+          <div class="panel-head">
+            <div>
+              <h2>다음 월간 리밸런싱 제안</h2>
+              <p class="muted">종목 분석 화면 아래에서 바로 운용 결정을 확인합니다.</p>
+            </div>
+          </div>
+          <div id="portfolio-summary" class="portfolio-summary"></div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>자산</th>
+                  <th>비중</th>
+                  <th>투입액</th>
+                  <th>예측 점수</th>
+                  <th>역할</th>
+                </tr>
+              </thead>
+              <tbody id="portfolio-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="portfolio-panel manager-shortcuts">
+          <div class="panel-head">
+            <div>
+              <h2>펀드매니저 도구</h2>
+              <p class="muted">종목 화면을 떠나지 않고 기존 핵심 기능으로 바로 이동합니다.</p>
+            </div>
+          </div>
+          <div class="shortcut-grid">
+            <button class="shortcut-card" data-jump-view="contribution" type="button">
+              <strong>월간 투자 추천</strong>
+              <span>월 추가금과 기존 자산을 목표 비중에 맞춰 배분합니다.</span>
+            </button>
+            <button class="shortcut-card" data-jump-view="live" type="button">
+              <strong>실전 보유 운용</strong>
+              <span>보유내역, KIS 계좌 동기화, 월중 손실 제한을 확인합니다.</span>
+            </button>
+            <button class="shortcut-card" data-jump-view="replay" type="button">
+              <strong>월간 리플레이</strong>
+              <span>투입 시작일과 중단일 기준 누적식 결과를 봅니다.</span>
+            </button>
+            <button class="shortcut-card" data-jump-view="lab" type="button">
+              <strong>전략·보조지표</strong>
+              <span>MFI, RSI, MACD와 전략 후보군 검증을 확인합니다.</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="portfolio-panel">
+          <div class="panel-head">
+            <div>
+              <h2>자동매매 예시 플레이북</h2>
+              <p class="muted">실제 주문 전송이 아니라, 알파스톡 신호를 어떻게 매매 규칙으로 바꿀지 보여주는 예시입니다.</p>
+            </div>
+          </div>
+          <div id="automation-playbooks" class="playbook-grid"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-single">
+        <div class="detail-grid">
+          <section class="chart-panel">
+            <div class="panel-head">
+              <div>
+                <h2 id="single-title">NVDA 종목분석</h2>
+                <p id="single-note">단일 종목은 보조 판단입니다. 최종 운용은 포트폴리오 전략을 우선합니다.</p>
+              </div>
+            </div>
+            <div class="chart-toolbar">
+              <span>캔들</span><span>라인</span><span>MFI</span><span>RSI</span><span>MACD</span><span>거래량</span>
+            </div>
+            <canvas id="single-chart" width="1200" height="420"></canvas>
+          </section>
+          <aside class="right-stack">
+            <section class="quote-box">
+              <h2>종목 판단</h2>
+              <div id="single-report"></div>
+            </section>
+            <section class="quote-box">
+              <h2>시장 인텔리전스</h2>
+              <div id="market-intel" class="intel-list"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-live">
+        <section class="portfolio-panel live-manager">
+          <div class="panel-head">
+            <div>
+              <h2>보유 종목·리밸런싱</h2>
+              <p class="muted">수동 입력 또는 KIS 계좌 동기화 내역을 바탕으로 목표 비중까지 조정합니다.</p>
+            </div>
+            <div class="button-row">
+              <button id="save-live-portfolio" type="button">보유내역 저장</button>
+              <button id="snapshot-live-baseline" type="button">월초 기준 저장</button>
+            </div>
+          </div>
+          <div class="live-input-grid">
+            <div>
+              <label for="live-holdings">보유내역</label>
+              <textarea id="live-holdings" rows="8" spellcheck="false" placeholder="QQQ,12&#10;QLD,8&#10;BIL,0,3000000"></textarea>
+            </div>
+            <div class="live-side-inputs">
+              <label for="live-cash">현금</label>
+              <input id="live-cash" value="0" inputmode="numeric">
+              <label for="live-baseline-value">월초 기준 평가액</label>
+              <input id="live-baseline-value" value="0" inputmode="numeric">
+              <label for="live-baseline-date">기준일</label>
+              <input id="live-baseline-date" type="date">
+              <div class="button-row live-alert-buttons">
+                <button id="check-live-alerts" type="button">지금 점검</button>
+                <button id="enable-live-alerts" type="button">실시간 알림 켜기</button>
+              </div>
+              <p id="live-status" class="muted"></p>
+            </div>
+          </div>
+          <div id="live-summary" class="portfolio-summary"></div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>자산</th>
+                  <th>현재 수량</th>
+                  <th>현재 평가액</th>
+                  <th>현재 비중</th>
+                  <th>목표 비중</th>
+                  <th>월간 실행</th>
+                </tr>
+              </thead>
+              <tbody id="live-rebalance-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="portfolio-panel kis-panel">
+          <div class="panel-head">
+            <div>
+              <h2>KIS 해외주식 연결</h2>
+              <p class="muted">설정의 API 연동 값을 사용해 한국투자증권 모의투자부터 연결합니다.</p>
+            </div>
+            <div class="button-row">
+              <button id="kis-refresh-status" type="button">KIS 상태</button>
+              <button id="kis-sync-portfolio" type="button">계좌 동기화</button>
+            </div>
+          </div>
+          <div class="live-input-grid">
+            <div>
+              <label for="kis-orders">주문 초안 JSON</label>
+              <textarea id="kis-orders" rows="8" spellcheck="false" placeholder='[{"side":"buy","symbol":"QQQ","exchange":"NASD","quantity":1,"limitPrice":520.25}]'></textarea>
+            </div>
+            <div class="live-side-inputs">
+              <p class="muted">지정가 주문 초안을 먼저 검증하고, 서버 주문 잠금과 확인 문구를 통과한 경우에만 전송합니다.</p>
+              <div class="button-row live-alert-buttons">
+                <button id="kis-create-orders" type="button">리밸런싱 주문 초안 생성</button>
+                <button id="kis-preview-orders" type="button">주문 초안 검증</button>
+                <button id="kis-submit-orders" type="button">KIS 주문 전송</button>
+              </div>
+              <p id="kis-status" class="muted"></p>
+            </div>
+          </div>
+          <div id="kis-preview" class="portfolio-summary"></div>
+        </section>
+
+        <section class="portfolio-panel">
+          <div class="panel-head">
+            <div>
+              <h2>월중 알림</h2>
+              <p class="muted">손실 제한, 지표 감산, 회복 재진입 신호를 실제 보유 규모에 맞춰 표시합니다.</p>
+            </div>
+          </div>
+          <div id="live-alert-summary" class="portfolio-summary"></div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>시점</th>
+                  <th>알림</th>
+                  <th>대상</th>
+                  <th>규모</th>
+                  <th>근거</th>
+                </tr>
+              </thead>
+              <tbody id="live-alert-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-contribution">
+        <section class="portfolio-panel">
+          <div class="panel-head">
+            <div>
+              <h2>월간 추가 투자 추천</h2>
+              <p class="muted">기존 투자금과 월 추가금을 합쳐 목표 비중까지 매수·매도 규모를 계산합니다.</p>
+            </div>
+          </div>
+          <div id="contribution-summary" class="portfolio-summary"></div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>자산</th>
+                  <th>현재 추정 비중</th>
+                  <th>목표 비중</th>
+                  <th>현재 평가액</th>
+                  <th>목표 평가액</th>
+                  <th>이번 달 실행</th>
+                  <th>근거 지표</th>
+                </tr>
+              </thead>
+              <tbody id="contribution-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-lab">
+        <section class="portfolio-panel">
+          <h2>전략 후보군과 현재 선택</h2>
+          <div id="strategy-cards" class="strategy-grid"></div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>전략</th>
+                  <th>선택 횟수</th>
+                  <th>평균 다음달</th>
+                  <th>최악 월</th>
+                  <th>현재 상태</th>
+                </tr>
+              </thead>
+              <tbody id="strategy-table"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="portfolio-panel">
+          <h2>보조지표 스캐너</h2>
+          <p class="muted">MFI, RSI, MACD, ATR, 55일 돌파를 함께 보고 매수 강도와 리밸런싱 우선순위를 정합니다.</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>자산</th>
+                  <th>MFI</th>
+                  <th>RSI</th>
+                  <th>MACD</th>
+                  <th>ATR%</th>
+                  <th>판정</th>
+                </tr>
+              </thead>
+              <tbody id="indicator-table"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="portfolio-panel">
+          <h2>예측 엔진 검증 상태</h2>
+          <p class="muted">매월 그 시점까지의 데이터만으로 전략을 고르고 다음 달 결과로 검증합니다.</p>
+          <div id="validation-summary" class="validation-grid"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-replay">
+        <section class="portfolio-panel">
+          <h2>월간 리플레이</h2>
+          <p class="muted">투입 시작일과 보유 중단일을 지정해 누적식 투자 결과와 벤치마크를 비교합니다.</p>
+          <div class="replay-toolbar">
+            <label for="projection-start">투입 시작일</label>
+            <input id="projection-start" type="date">
+            <label for="projection-end">보유 중단일</label>
+            <input id="projection-end" type="date">
+            <button id="projection-run" type="button">기간 수익 계산</button>
+          </div>
+          <div class="replay-summary-grid">
+            <section class="replay-box">
+              <h3>선택 기간 결과</h3>
+              <div id="projection-result" class="replay-metrics"></div>
+            </section>
+            <section class="replay-box">
+              <h3>전체 누적식 워크포워드</h3>
+              <div id="dca-summary" class="replay-metrics"></div>
+            </section>
+          </div>
+          <div class="replay-chart-wrap">
+            <div class="panel-head compact-head">
+              <div>
+                <h3>누적식 리플레이 차트</h3>
+                <p class="muted">파란 선은 전략 평가액, 검은 선은 벤치마크, 회색 선은 누적 원금입니다.</p>
+              </div>
+            </div>
+            <canvas id="replay-chart" width="1200" height="360"></canvas>
+          </div>
+          <div class="table-scroll">
+            <table class="replay-table">
+              <thead>
+                <tr>
+                  <th>리밸런싱일</th>
+                  <th>예측 국면</th>
+                  <th>선택 전략</th>
+                  <th>상위 편입</th>
+                  <th>누적 원금</th>
+                  <th>전략 평가액</th>
+                  <th>전략</th>
+                  <th id="replay-benchmark-head">벤치마크</th>
+                  <th>판정</th>
+                </tr>
+              </thead>
+              <tbody id="replay-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-stress">
+        <section class="portfolio-panel">
+          <h2>다양한 시장 환경 검증</h2>
+          <div id="stress-summary" class="portfolio-summary"></div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>구간</th>
+                  <th>포트폴리오</th>
+                  <th id="stress-benchmark-head">벤치마크</th>
+                  <th>방어/초과</th>
+                </tr>
+              </thead>
+              <tbody id="scenario-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-alerts">
+        <section class="portfolio-panel">
+          <div class="panel-head">
+            <div>
+              <h2>알림센터</h2>
+              <p class="muted">월중 손실 제한, 회복 재진입, 계좌 연동, 주문 잠금 상태를 한 곳에서 확인합니다.</p>
+            </div>
+            <div class="button-row">
+              <button id="open-live-alerts" type="button">보유·운용 보기</button>
+              <button id="clear-notification-log" type="button">알림 기록 비우기</button>
+            </div>
+          </div>
+          <div id="notification-summary" class="portfolio-summary"></div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>시각</th>
+                  <th>종류</th>
+                  <th>내용</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody id="notification-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-settings">
+        <section class="portfolio-panel settings-panel">
+          <div class="panel-head">
+            <div>
+              <h2>설정</h2>
+              <p class="muted">한국투자증권 API 연동에 필요한 개인 값을 이 화면에서 입력합니다.</p>
+            </div>
+            <div class="button-row">
+              <button id="load-kis-settings" type="button">설정 불러오기</button>
+              <button id="save-kis-settings" type="button">설정 저장</button>
+            </div>
+          </div>
+          <div class="settings-grid">
+            <label><span>거래 모드</span><select id="kis-setting-mode"><option value="paper">모의투자</option><option value="live">실전투자</option></select></label>
+            <label><span>계좌번호 앞 8자리</span><input id="kis-setting-account" autocomplete="off"></label>
+            <label><span>계좌상품코드</span><input id="kis-setting-product" value="01" autocomplete="off"></label>
+            <label><span>해외거래소</span><input id="kis-setting-exchange" value="NASD" autocomplete="off"></label>
+            <label><span>거래통화</span><input id="kis-setting-currency" value="USD" autocomplete="off"></label>
+            <label><span>모의 App Key</span><input id="kis-setting-paper-key" autocomplete="off"></label>
+            <label><span>모의 App Secret</span><input id="kis-setting-paper-secret" type="password" autocomplete="new-password"></label>
+            <label><span>실전 App Key</span><input id="kis-setting-live-key" autocomplete="off"></label>
+            <label><span>실전 App Secret</span><input id="kis-setting-live-secret" type="password" autocomplete="new-password"></label>
+            <label><span>주문 전송 잠금</span><select id="kis-setting-execution"><option value="disabled">잠금</option><option value="enabled">전송 허용</option></select></label>
+            <label><span>실전 주문 추가 잠금</span><select id="kis-setting-live-orders"><option value="false">차단</option><option value="true">허용</option></select></label>
+          </div>
+          <p id="settings-status" class="muted"></p>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
