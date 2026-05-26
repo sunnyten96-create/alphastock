@@ -28,6 +28,39 @@ let chartState = {
   indicators: new Set(["sma20", "sma50", "volume", "mfi", "rsi"])
 };
 
+async function requestJson(url, options = {}) {
+  const nativeFetch = typeof fetch === "function"
+    ? fetch
+    : typeof window !== "undefined" && typeof window.fetch === "function"
+      ? window.fetch.bind(window)
+      : null;
+  if (nativeFetch) {
+    const res = await nativeFetch(url, options);
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || `${url} failed`);
+    return payload;
+  }
+  if (typeof XMLHttpRequest === "undefined") throw new Error("이 브라우저에서 네트워크 요청 API를 사용할 수 없습니다.");
+  return await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(options.method || "GET", url, true);
+    Object.entries(options.headers || {}).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+    xhr.onload = () => {
+      let payload = {};
+      try {
+        payload = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+      } catch {
+        reject(new Error(`${url} JSON parse failed`));
+        return;
+      }
+      if (xhr.status < 200 || xhr.status >= 300) reject(new Error(payload.error || `${url} failed`));
+      else resolve(payload);
+    };
+    xhr.onerror = () => reject(new Error(`${url} network failed`));
+    xhr.send(options.body || null);
+  });
+}
+
 const searchableSymbols = [
   ["QQQ", "Invesco QQQ Trust"], ["QLD", "ProShares Ultra QQQ"], ["TQQQ", "ProShares UltraPro QQQ"],
   ["SPY", "SPDR S&P 500 ETF"], ["SSO", "ProShares Ultra S&P500"], ["UPRO", "ProShares UltraPro S&P500"],
@@ -120,39 +153,37 @@ function indicators(rows) {
 }
 
 async function fetchAsset(symbol) {
-  const res = await fetch(`/market/series?symbol=${encodeURIComponent(symbol)}`);
-  const payload = await res.json();
-  if (!res.ok) throw new Error(payload.error || `${symbol} data failed`);
+  const payload = await requestJson(`/market/series?symbol=${encodeURIComponent(symbol)}`);
   return { symbol, rows: payload.rows, ind: indicators(payload.rows) };
 }
 
 async function fetchChartRows(symbol, frame = chartState.frame) {
-  const res = await fetch(`/market/chart?symbol=${encodeURIComponent(symbol)}&frame=${encodeURIComponent(frame)}`);
-  const payload = await res.json();
-  if (!res.ok) throw new Error(payload.error || `${symbol} chart failed`);
-  return payload;
+  return await requestJson(`/market/chart?symbol=${encodeURIComponent(symbol)}&frame=${encodeURIComponent(frame)}`);
 }
 
 async function fetchNews(symbol) {
-  const res = await fetch(`/market/news?symbols=${encodeURIComponent(symbol)}`);
-  if (!res.ok) return [];
-  const payload = await res.json();
-  return payload.items || [];
+  try {
+    const payload = await requestJson(`/market/news?symbols=${encodeURIComponent(symbol)}`);
+    return payload.items || [];
+  } catch {
+    return [];
+  }
 }
 
 async function fetchFundamentals(symbol) {
-  const res = await fetch(`/market/fundamentals?symbol=${encodeURIComponent(symbol)}`);
-  if (!res.ok) return {};
-  const payload = await res.json();
-  return payload.data || {};
+  try {
+    const payload = await requestJson(`/market/fundamentals?symbol=${encodeURIComponent(symbol)}`);
+    return payload.data || {};
+  } catch {
+    return {};
+  }
 }
 
 async function fetchResearchLatest(force = false) {
   if (researchLatest && !force) return researchLatest;
   try {
-    const res = await fetch("/market/research/latest");
-    const payload = await res.json();
-    researchLatest = res.ok && payload.available ? payload : null;
+    const payload = await requestJson("/market/research/latest");
+    researchLatest = payload.available ? payload : null;
   } catch {
     researchLatest = null;
   }
@@ -164,21 +195,18 @@ function activeResearchJson() {
 }
 
 async function fetchLivePortfolio() {
-  const res = await fetch("/market/portfolio");
-  if (!res.ok) throw new Error("Saved portfolio failed");
-  const payload = await res.json();
+  const payload = await requestJson("/market/portfolio");
   livePortfolio = normalizeLivePortfolio(payload);
   syncLivePortfolioInputs();
 }
 
 async function persistLivePortfolio() {
-  const res = await fetch("/market/portfolio", {
+  const payload = await requestJson("/market/portfolio", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(livePortfolio)
   });
-  if (!res.ok) throw new Error("Portfolio save failed");
-  livePortfolio = normalizeLivePortfolio(await res.json());
+  livePortfolio = normalizeLivePortfolio(payload);
   syncLivePortfolioInputs();
 }
 
@@ -244,9 +272,7 @@ function setKisStatus(text) {
 }
 
 async function fetchKisBrokerStatus() {
-  const res = await fetch("/market/kis/status");
-  const status = await res.json();
-  if (!res.ok) throw new Error(status.error || "KIS status failed");
+  const status = await requestJson("/market/kis/status");
   kisBrokerStatus = status;
   if ($("#kis-preview")) {
     $("#kis-preview").innerHTML = `
@@ -269,13 +295,11 @@ function readKisOrders() {
 }
 
 async function previewKisOrders() {
-  const res = await fetch("/market/kis/orders/preview", {
+  const preview = await requestJson("/market/kis/orders/preview", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ orders: readKisOrders() })
   });
-  const preview = await res.json();
-  if (!res.ok) throw new Error(preview.error || "KIS order preview failed");
   $("#kis-preview").innerHTML = `
     <div><span class="label">검증 모드</span><strong>${preview.mode}</strong></div>
     <div><span class="label">주문 수</span><strong>${preview.orders.length}</strong></div>
@@ -325,13 +349,11 @@ async function syncKisPortfolio() {
     setKisStatus("API 키가 없어 모의투자 포트폴리오로 실행했습니다. 실계좌 동기화는 설정에서 App Key와 계좌번호를 입력한 뒤 가능합니다.");
     return;
   }
-  const res = await fetch("/market/kis/sync", {
+  const payload = await requestJson("/market/kis/sync", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: "{}"
   });
-  const payload = await res.json();
-  if (!res.ok) throw new Error(payload.error || "KIS portfolio sync failed");
   livePortfolio = normalizeLivePortfolio(payload.portfolio);
   syncLivePortfolioInputs();
   setKisStatus(`${payload.broker.mode} ${payload.broker.exchange} 계좌 ${payload.broker.holdingCount}개 동기화`);
@@ -360,13 +382,11 @@ async function submitKisOrders() {
   const status = kisBrokerStatus || await fetchKisBrokerStatus();
   const confirm = window.prompt(`주문을 전송하려면 ${status.orderConfirmation} 를 입력하세요.`);
   if (!confirm) return;
-  const res = await fetch("/market/kis/orders", {
+  const payload = await requestJson("/market/kis/orders", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ orders: readKisOrders(), confirm })
   });
-  const payload = await res.json();
-  if (!res.ok) throw new Error(payload.error || "KIS order submit failed");
   setKisStatus(`${payload.mode} 주문 ${payload.submitted}건 전송 완료`);
   addNotification("KIS 주문", `${payload.mode} 주문 ${payload.submitted}건 전송`, "완료");
   await syncKisPortfolio();
@@ -418,9 +438,7 @@ function setSettingsStatus(text) {
 }
 
 async function loadKisSettings() {
-    const res = await fetch("/market/kis/settings");
-  const settings = await res.json();
-  if (!res.ok) throw new Error(settings.error || "KIS settings failed");
+  const settings = await requestJson("/market/kis/settings");
   if ($("#kis-setting-mode")) $("#kis-setting-mode").value = settings.mode || "paper";
   if ($("#kis-setting-account")) $("#kis-setting-account").value = settings.account || "";
   if ($("#kis-setting-product")) $("#kis-setting-product").value = settings.product || "01";
@@ -452,13 +470,11 @@ async function saveKisSettings() {
     liveOrders: $("#kis-setting-live-orders")?.value || "false",
     hashOrders: "true"
   };
-    const res = await fetch("/market/kis/settings", {
+  const settings = await requestJson("/market/kis/settings", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload)
   });
-  const settings = await res.json();
-  if (!res.ok) throw new Error(settings.error || "KIS settings save failed");
   addNotification("KIS 설정", `${settings.mode} 모드 API 설정 저장`, "완료");
   await loadKisSettings();
   await fetchKisBrokerStatus();
