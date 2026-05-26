@@ -29,6 +29,30 @@ let chartState = {
 };
 
 async function requestJson(url, options = {}) {
+  const rememberError = (error) => {
+    if (typeof window !== "undefined") window.__alphaLastRequest = { url, error: error.message };
+    return error;
+  };
+  if (typeof XMLHttpRequest !== "undefined") {
+    return await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(options.method || "GET", url, true);
+      Object.entries(options.headers || {}).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+      xhr.onload = () => {
+        let payload = {};
+        try {
+          payload = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+        } catch {
+          reject(rememberError(new Error(`${url} JSON parse failed`)));
+          return;
+        }
+        if (xhr.status < 200 || xhr.status >= 300) reject(rememberError(new Error(payload.error || `${url} failed`)));
+        else resolve(payload);
+      };
+      xhr.onerror = () => reject(rememberError(new Error(`${url} network failed`)));
+      xhr.send(options.body || null);
+    });
+  }
   const nativeFetch = typeof fetch === "function"
     ? fetch
     : typeof window !== "undefined" && typeof window.fetch === "function"
@@ -37,28 +61,10 @@ async function requestJson(url, options = {}) {
   if (nativeFetch) {
     const res = await nativeFetch(url, options);
     const payload = await res.json();
-    if (!res.ok) throw new Error(payload.error || `${url} failed`);
+    if (!res.ok) throw rememberError(new Error(payload.error || `${url} failed`));
     return payload;
   }
-  if (typeof XMLHttpRequest === "undefined") throw new Error("이 브라우저에서 네트워크 요청 API를 사용할 수 없습니다.");
-  return await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open(options.method || "GET", url, true);
-    Object.entries(options.headers || {}).forEach(([key, value]) => xhr.setRequestHeader(key, value));
-    xhr.onload = () => {
-      let payload = {};
-      try {
-        payload = xhr.responseText ? JSON.parse(xhr.responseText) : {};
-      } catch {
-        reject(new Error(`${url} JSON parse failed`));
-        return;
-      }
-      if (xhr.status < 200 || xhr.status >= 300) reject(new Error(payload.error || `${url} failed`));
-      else resolve(payload);
-    };
-    xhr.onerror = () => reject(new Error(`${url} network failed`));
-    xhr.send(options.body || null);
-  });
+  throw rememberError(new Error("이 브라우저에서 네트워크 요청 API를 사용할 수 없습니다."));
 }
 
 const searchableSymbols = [
