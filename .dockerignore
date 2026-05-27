@@ -1,0 +1,9 @@
+.env
+data/*
+!data/research-report.json
+!data/research-report.md
+!data/model-registry.json
+data/kis-token-*.json
+data/portfolio.json
+node_modules
+server*.log

@@ -1,0 +1,12 @@
+{
+  "name": "market-timing-advisor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "research": "node scripts/research-engine.mjs",
+    "search-alpha": "node scripts/alpha-variant-search.mjs",
+    "verify": "node scripts/verify-app.mjs"
+  }
+}

@@ -1,0 +1,6 @@
+.env
+.tools/
+data/kis-token-*.json
+data/portfolio.json
+*.log
+data/*.log
